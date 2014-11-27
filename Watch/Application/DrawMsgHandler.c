@@ -169,7 +169,7 @@ void Draw(Draw_t *Info, unsigned char const *pData, unsigned char Mode)
       {
       case FUNC_DRAW_TEMPLATE: DrawTemplateToIdle(Info); break;
       case FUNC_DRAW_BLOCK: DrawBlockToIdle(Info); break;
-      case FUNC_DRAW_HANZI: DrawHanziClock(Info); break;
+      case FUNC_DRAW_WORDCLK: DrawWordClock(Info); break;
       default: DrawBitmapToIdle(Info, WIDTH_IN_BYTES(Info->Width), pData); break;
       }
     }

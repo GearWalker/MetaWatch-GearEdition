@@ -17,7 +17,7 @@
 #ifndef VERSION_H
 #define VERSION_H
 
-#define APP_VER     "1.5.1"
+#define APP_VER     "1.5.1.G"
 #define BUILD_VER   "962.000"
 
 #endif /* VERSION_H */

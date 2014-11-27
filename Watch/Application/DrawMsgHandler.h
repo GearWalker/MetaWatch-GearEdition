@@ -41,7 +41,7 @@ typedef struct
 #define FUNC_DRAW_ICON       (4 << 4)
 
 #define FUNC_DRAW_BLOCK      (5 << 4)
-#define FUNC_DRAW_HANZI      (6 << 4)
+#define FUNC_DRAW_WORDCLK    (6 << 4)
 
 #define DRAW_ID_TYPE_FONT     (0)
 #define DRAW_ID_TYPE_BMP      (0x80)

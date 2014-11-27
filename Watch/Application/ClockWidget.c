@@ -104,9 +104,9 @@ static Draw_t const DrawList[][MAX_DRAW_ITEM_NUM] =
     {DRAW_ID_TYPE_FONT | FUNC_GET_SEC | MetaWatch16, 58, 51, DRAW_OPT_BITWISE_OR},
     {DRAW_ID_TYPE_FONT | FUNC_GET_DOW | MetaWatch7, 58, 55, DRAW_OPT_OVERLAP_SEC}
   },
-  { //4Q-Hanzi
-    {DRAW_ID_TYPE_BMP | FUNC_DRAW_TEMPLATE | TMPL_WGT_HANZI, 0, 0, TMPL_TYPE_4Q, LCD_COL_NUM, LCD_ROW_NUM},
-    {DRAW_ID_TYPE_BMP | FUNC_DRAW_HANZI | Time, 0, 0, DRAW_OPT_BITWISE_DST_NOT}
+  { //4Q-Word Clock
+    {DRAW_ID_TYPE_BMP | FUNC_DRAW_TEMPLATE | TMPL_WGT_WORD, 0, 0, TMPL_TYPE_4Q, LCD_COL_NUM, LCD_ROW_NUM},
+    {DRAW_ID_TYPE_BMP | FUNC_DRAW_WORDCLK | Time, 0, 0, DRAW_OPT_BITWISE_DST_NOT}
   },
 };
 
@@ -129,24 +129,73 @@ static Widget_t const ClockWidget[] =
 
 #define HOME_WIDGET_NUM (sizeof(ClockWidget) / sizeof(Widget_t))
 
-#define CN_CLK_DIAN     12
-#define CN_CLK_ZHENG    13
-#define CN_CLK_FEN      29
+#define WORD_CLK_WIDTH     15
+#define WORD_CLK_WIDTH_IN_BYTES  ((WORD_CLK_WIDTH >> 3) + 1)
+#define WORD_CLK_HEIGHT    18
+#define WORD_CLK_PER_LINE  6
 
-#define CN_CLK_HOURH    0
-#define CN_CLK_HOUR_SHI 1
-#define CN_CLK_HOURL    2
+void MarkChar(unsigned char Index, Draw_t *Info);
+void MarkWord(unsigned char Index,unsigned char Size, Draw_t *Info);
 
-#define CN_CLK_MINH     12
-#define CN_CLK_MIN_SHI  18
-#define CN_CLK_MINL     19
+typedef struct
+{
+	unsigned char index;
+	unsigned char size;
+} WordPos_t;
 
-#define CN_CLK_ZI_WIDTH     15
-#define CN_CLK_ZI_WIDTH_IN_BYTES  ((CN_CLK_ZI_WIDTH >> 3) + 1)
-#define CN_CLK_ZI_HEIGHT    18
-#define CN_CLK_ZI_PER_LINE  6
+static WordPos_t const ClockWord_H[] =
+{
+	{40,6},
+	{50,3},
+	{27,3},
+	{5,5},
+	{0,4},
+	{23,4},
+	{10,3},
+	{14,5},
+	{45,5},
+	{35,4},
+	{20,3},
+	{30,6}
+};
 
-static void DrawHanzi(unsigned char Index, Draw_t *Info);
+static WordPos_t const ClockWord_MM[] =
+{
+	/*MINUTE*/
+	{73,1},
+	{96,4},
+	{70,3},
+	{60,7},
+	{90,6},
+	{90,6},
+	{54,6},
+	{54,6},
+	{85,5},
+	{85,5},
+	{80,5},
+	{80,5}
+};
+
+static WordPos_t const ClockWord_SM[] =
+{
+	/*SUB MINUTE*/
+	{75,5},
+	{0,0},
+	{0,0},
+	{0,0},
+	{0,0},
+	{96,4},
+	{0,0},
+	{96,4},
+	{0,0},
+	{96,4},
+	{0,0},
+	{96,4}
+};
+
+static WordPos_t const ClockWord_AM = {100,2};
+static WordPos_t const ClockWord_PM = {102,2};
+static WordPos_t const ClockWord_BATT = {106,4};
 
 /******************************************************************************/
 
@@ -189,19 +238,29 @@ void DrawBitmapToIdle(Draw_t *Info, unsigned char WidthInBytes, unsigned char co
   {
     for (y = 0; y < Info->Height; ++y)
     {
-      Set = *(pBitmap + y * WidthInBytes) & MaskBit;
       Delta = (ClockWidget[FACE_ID(Info->Opt)].LayoutType == LAYOUT_FULL_SCREEN) &&
               (Info->Y < HALF_SCREEN_ROWS && (Info->Y + y) >= HALF_SCREEN_ROWS) ?
               BYTES_PER_QUAD : 0;
       
-      BitOp(pByte + y * BYTES_PER_QUAD_LINE + Delta, ColBit, Set, Info->Opt & DRAW_OPT_BITWISE_MASK);
+      if(pBitmap==NULL)
+      {
+    	  unsigned char *pTarget = (pByte + y * BYTES_PER_QUAD_LINE + Delta);
+    	  *pTarget |= ColBit;
+      }
+      else
+      {
+    	  Set = *(pBitmap + y * WidthInBytes) & MaskBit;
+    	  BitOp(pByte + y * BYTES_PER_QUAD_LINE + Delta, ColBit, Set, Info->Opt & DRAW_OPT_BITWISE_MASK);
+      }
     }
 
     MaskBit <<= 1;
     if (MaskBit == 0)
     {
       MaskBit = BIT0;
-      pBitmap ++;
+
+      if(pBitmap!=NULL)
+      	  pBitmap ++;
     }
     
     ColBit <<= 1;
@@ -262,37 +321,44 @@ void DrawBlockToIdle(Draw_t *Info)
   }
 }
 
-void DrawHanziClock(Draw_t *Info)
+void DrawWordClock(Draw_t *Info)
 {
-  Info->Id = DRAW_ID_TYPE_BMP;
-  Info->Width = CN_CLK_ZI_WIDTH;
-  Info->Height = CN_CLK_ZI_HEIGHT;
-  Info->Opt |= DRAW_OPT_BITWISE_DST_NOT;
+	Info->Id = DRAW_ID_TYPE_BMP;
+	Info->Opt |= DRAW_OPT_BITWISE_NOT;
 
-  unsigned char Time = RTCHOUR;
-  if (!GetProperty(PROP_24H_TIME_FORMAT)) Time = To12H(Time);
+	//Hour
+	unsigned char Time = To12H(RTCHOUR);
+	MarkWord(ClockWord_H[Time].index,ClockWord_H[Time].size,Info);
 
-  if (Time >= 0x20) DrawHanzi(CN_CLK_HOURH, Info);
-  if (Time >= 0x10) DrawHanzi(CN_CLK_HOUR_SHI, Info);
+	//Minute
+	Time = (RTCMIN / 5);
+	MarkWord(ClockWord_MM[Time].index,ClockWord_MM[Time].size,Info);
+	MarkWord(ClockWord_SM[Time].index,ClockWord_SM[Time].size,Info);
 
-  if (Time != 0x20 && Time != 0x10) DrawHanzi(CN_CLK_HOURL + BCD_L(Time), Info);
+	//AM:PM
+	if(RTCHOUR > 0x11)
+		MarkWord(ClockWord_PM.index,ClockWord_PM.size,Info); //PM
+	else
+		MarkWord(ClockWord_AM.index,ClockWord_AM.size,Info); //AM
 
-  Time = RTCMIN;
-  if (Time)
-  {
-    if (Time >= 0x20) DrawHanzi(CN_CLK_MINH + BCD_H(Time), Info);
-    if (Time >= 0x10) DrawHanzi(CN_CLK_MIN_SHI, Info);
-    else DrawHanzi(CN_CLK_MINL, Info); // 0
-    
-    if (BCD_L(Time)) DrawHanzi(CN_CLK_MINL + BCD_L(Time), Info);
-    DrawHanzi(CN_CLK_FEN, Info);
-  }
-  else  DrawHanzi(CN_CLK_ZHENG, Info);
+	//Battery status
+	if(BatteryPercentage() <= WARNING_LEVEL)
+		MarkWord(ClockWord_BATT.index,ClockWord_BATT.size,Info);
 }
 
-static void DrawHanzi(unsigned char Index, Draw_t *Info)
+void MarkWord(unsigned char Index, unsigned char Size, Draw_t *Info)
 {
-  Info->X = Index % CN_CLK_ZI_PER_LINE * (CN_CLK_ZI_WIDTH + 1);
-  Info->Y = Index / CN_CLK_ZI_PER_LINE * (CN_CLK_ZI_HEIGHT + 1) + 1;
-  DrawBitmapToIdle(Info, WIDTH_IN_BYTES(Info->Width), (unsigned char *)GetDrawBuffer());
+	if(Size==0)return;
+
+	Info->X = 3 + ( Index % WORD_CLK_PER_LINE * (WORD_CLK_WIDTH));
+	Info->Y = 4 + ( Index / WORD_CLK_PER_LINE * (WORD_CLK_HEIGHT+1));
+	Info->Height = WORD_CLK_HEIGHT;
+	Info->Width = WORD_CLK_WIDTH*Size;
+	DrawBitmapToIdle(Info, WIDTH_IN_BYTES(Info->Width), (unsigned char *)GetDrawBuffer());
+
+	Info->Height = 1;
+	Info->Y = Info->Y - 1;
+	DrawBitmapToIdle(Info, WIDTH_IN_BYTES(Info->Width), NULL); // Add top border
+	Info->Y = Info->Y + WORD_CLK_HEIGHT + 1;
+	DrawBitmapToIdle(Info, WIDTH_IN_BYTES(Info->Width), NULL); // Add bottom border
 }
